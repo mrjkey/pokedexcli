@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/mrjkey/pokedexcli/internal/pokecache"
 )
 
 type cliCommand struct {
@@ -42,8 +46,11 @@ func initCommands() {
 	}
 }
 
+var cache pokecache.Cache
+
 func main() {
 	initCommands()
+	cache = pokecache.NewCache(time.Second * 5)
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("Pokedex > ")
@@ -97,25 +104,48 @@ type Location struct {
 	Url  string `json:"url"`
 }
 
-func commandMap() error {
+func getRequest() ([]byte, error) {
 	offsetStr := fmt.Sprintf("offset=%v", offset)
 	limitStr := fmt.Sprintf("limit=%v", limit)
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/?%v&%v", offsetStr, limitStr)
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 
+	body, ok := cache.Get(url)
+	if !ok {
+		resp, err := http.Get(url)
+		if err != nil {
+			return []byte{}, err
+		}
+		defer resp.Body.Close()
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+	return body, nil
+}
+
+func printMaps(body []byte) error {
 	var maps MapResponse
-	decoder := json.NewDecoder(resp.Body)
-	err = decoder.Decode(&maps)
+	err := json.Unmarshal(body, &maps)
 	if err != nil {
 		return err
 	}
 
 	for _, result := range maps.Results {
 		fmt.Println(result.Name)
+	}
+	return nil
+}
+
+func commandMap() error {
+	body, err := getRequest()
+	if err != nil {
+		return err
+	}
+
+	err = printMaps(body)
+	if err != nil {
+		return err
 	}
 
 	offset += 20
@@ -127,25 +157,17 @@ func commanMapb() error {
 	if offset < 0 {
 		offset = 0
 	}
-	offsetStr := fmt.Sprintf("offset=%v", offset)
-	limitStr := fmt.Sprintf("limit=%v", limit)
-	url := fmt.Sprintf("https://pokeapi.co/api/v2/location/?%v%v", offsetStr, limitStr)
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 
-	var maps MapResponse
-	decoder := json.NewDecoder(resp.Body)
-	err = decoder.Decode(&maps)
+	body, err := getRequest()
 	if err != nil {
 		return err
 	}
 
-	for _, result := range maps.Results {
-		fmt.Println(result.Name)
+	err = printMaps(body)
+	if err != nil {
+		return err
 	}
+
 	return nil
 }
 
