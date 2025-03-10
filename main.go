@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 type cliCommand struct {
 	name        string
 	description string
-	callback    func() error
+	callback    func([]string) error
 }
 
 var commands map[string]cliCommand
@@ -43,6 +44,11 @@ func initCommands() {
 			description: "Displays previous 20 locations",
 			callback:    commanMapb,
 		},
+		"explore": {
+			name:        "explore",
+			description: "Show encounters in a specified area",
+			callback:    commandExplore,
+		},
 	}
 }
 
@@ -62,20 +68,20 @@ func main() {
 			fmt.Println("Unkown command")
 			continue
 		}
-		err := command.callback()
+		err := command.callback(input)
 		if err != nil {
 			fmt.Println(err)
 		}
 	}
 }
 
-func commandExit() error {
+func commandExit(args []string) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return fmt.Errorf("error exiting")
 }
 
-func commandHelp() error {
+func commandHelp(args []string) error {
 	listOfCommands := ""
 	for key, value := range commands {
 		listOfCommands += fmt.Sprintf("%s: %s\n", key, value.description)
@@ -92,23 +98,15 @@ func commandHelp() error {
 var offset = 0
 var limit = 20
 
-type MapResponse struct {
-	Count    int        `json:"count"`
-	Next     string     `json:"next"`
-	Previous string     `json:"previous"`
-	Results  []Location `json:"results"`
-}
-
-type Location struct {
-	Name string `json:"name"`
-	Url  string `json:"url"`
-}
-
 func getRequest() ([]byte, error) {
 	offsetStr := fmt.Sprintf("offset=%v", offset)
 	limitStr := fmt.Sprintf("limit=%v", limit)
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/?%v&%v", offsetStr, limitStr)
 
+	return processRequest(url)
+}
+
+func processRequest(url string) ([]byte, error) {
 	body, ok := cache.Get(url)
 	if ok {
 		return body, nil
@@ -130,6 +128,36 @@ func getRequest() ([]byte, error) {
 	return body, nil
 }
 
+func getRequestWithName(name string) ([]byte, error) {
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%v", name)
+	return processRequest(url)
+}
+
+type MapResponse struct {
+	Count    int        `json:"count"`
+	Next     string     `json:"next"`
+	Previous string     `json:"previous"`
+	Results  []Location `json:"results"`
+}
+
+type Location struct {
+	Name string `json:"name"`
+	Url  string `json:"url"`
+}
+
+type EncounterResponse struct {
+	Encounters []Encounter `json:"pokemon_encounters"`
+}
+
+type Encounter struct {
+	Pokemon Pokemon `json:"pokemon"`
+}
+
+type Pokemon struct {
+	Name string `json:"name"`
+	Url  string `json:"url"`
+}
+
 func printMaps(body []byte) error {
 	var maps MapResponse
 	err := json.Unmarshal(body, &maps)
@@ -143,7 +171,40 @@ func printMaps(body []byte) error {
 	return nil
 }
 
-func commandMap() error {
+func printPokemon(content []byte) error {
+	var encResp EncounterResponse
+	err := json.Unmarshal(content, &encResp)
+	if err != nil {
+		return err
+	}
+
+	for _, result := range encResp.Encounters {
+		fmt.Println(result.Pokemon.Name)
+	}
+	return nil
+}
+
+func commandExplore(args []string) error {
+	if len(args) < 2 {
+		return errors.New("missing location area name")
+	}
+	// fmt.Println(args[1])
+	locationAreaName := args[1]
+
+	content, err := getRequestWithName(locationAreaName)
+	if err != nil {
+		return err
+	}
+
+	err = printPokemon(content)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func commandMap(args []string) error {
 	body, err := getRequest()
 	if err != nil {
 		return err
@@ -158,7 +219,7 @@ func commandMap() error {
 	return nil
 }
 
-func commanMapb() error {
+func commanMapb(args []string) error {
 	offset -= 20
 	if offset < 0 {
 		offset = 0
