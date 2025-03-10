@@ -48,6 +48,16 @@ func initCommands() {
 			description: "Catch a pokemon",
 			callback:    commandCatch,
 		},
+		"inspect": {
+			name:        "inspect",
+			description: "Inspect a pokemon",
+			callback:    commandInspect,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Pokedex listed",
+			callback:    commandPokedex,
+		},
 	}
 }
 
@@ -146,9 +156,34 @@ func commandCatch(args []string) error {
 
 	if random < 20 {
 		fmt.Printf("%v was caught!\n", pokemonName)
+		pokedex[pokemonName] = pokemon
 	} else {
 		fmt.Printf("%v escaped!\n", pokemonName)
 	}
 
+	return nil
+}
+
+func commandInspect(args []string) error {
+	if len(args) < 2 {
+		return errors.New("no name given")
+	}
+
+	pokemon, ok := pokedex[args[1]]
+	if !ok {
+		fmt.Println("You have not caught that pokemon")
+		return nil
+	}
+
+	printPokemonStats(pokemon)
+
+	return nil
+}
+
+func commandPokedex(args []string) error {
+	fmt.Println("Your Pokedex:")
+	for key := range pokedex {
+		fmt.Printf(" - %v\n", key)
+	}
 	return nil
 }

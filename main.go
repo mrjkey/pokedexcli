@@ -14,10 +14,12 @@ import (
 )
 
 var cache pokecache.Cache
+var pokedex map[string]Pokemon
 
 func main() {
 	initCommands()
 	// rand.Seed(time.Now().UnixNano())
+	pokedex = make(map[string]Pokemon)
 	cache = pokecache.NewCache(time.Second * 5)
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
@@ -134,6 +136,10 @@ func printPokemon(content []byte) error {
 		fmt.Println(result.Pokemon.Name)
 	}
 	return nil
+}
+
+func printPokemonStats(pokemon Pokemon) {
+	fmt.Println(pokemon)
 }
 
 func cleanInput(text string) []string {
