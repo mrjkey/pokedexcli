@@ -110,17 +110,23 @@ func getRequest() ([]byte, error) {
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/?%v&%v", offsetStr, limitStr)
 
 	body, ok := cache.Get(url)
-	if !ok {
-		resp, err := http.Get(url)
-		if err != nil {
-			return []byte{}, err
-		}
-		defer resp.Body.Close()
-		body, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return []byte{}, err
-		}
+	if ok {
+		return body, nil
 	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	cache.Add(url, body)
+
 	return body, nil
 }
 
